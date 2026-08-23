@@ -30,6 +30,23 @@ export const NETWORK_PASSPHRASES: Record<StellarNetwork, string> = {
 };
 
 /**
+ * Resolves the Horizon base URL used for account/balance lookups.
+ *
+ * Honors an explicit `NEXT_PUBLIC_STELLAR_HORIZON_URL` override; otherwise
+ * maps the configured `NEXT_PUBLIC_STELLAR_NETWORK` ('testnet' | 'mainnet' |
+ * 'futurenet') to this module's well-known URLs, where the env's 'mainnet'
+ * corresponds to this module's 'public' network.
+ */
+export function resolveHorizonUrl(): string {
+  const override = process.env.NEXT_PUBLIC_STELLAR_HORIZON_URL?.trim();
+  if (override) return override.replace(/\/+$/, '');
+
+  const network = process.env.NEXT_PUBLIC_STELLAR_NETWORK ?? 'testnet';
+  const key: StellarNetwork = network === 'mainnet' ? 'public' : (network as StellarNetwork);
+  return HORIZON_URLS[key] ?? HORIZON_URLS.testnet;
+}
+
+/**
  * Get Stellar configuration for a specific network
  * @param network - The Stellar network to configure
  * @returns StellarConfig object with horizon URL and network passphrase

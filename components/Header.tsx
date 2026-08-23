@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { Menu, X } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
@@ -16,27 +16,9 @@ export default function Header() {
   const { isAuthenticated } = useAuthStore();
   const { address: walletAddress, connect: connectWallet } = useWalletStore();
 
-  // Periodically fetch balance when wallet is connected
-  useEffect(() => {
-    if (walletAddress) {
-      const fetchBalance = async () => {
-        try {
-          const res = await fetch(`https://horizon-testnet.stellar.org/accounts/${walletAddress}`);
-          if (res.ok) {
-            const data = await res.json();
-            const native = data.balances.find((b: any) => b.asset_type === 'native');
-            useWalletStore.setState({ balance: native ? native.balance : '0.0000000' });
-          }
-        } catch (err) {
-          console.error('Error fetching balance:', err);
-        }
-      };
-
-      fetchBalance();
-      const interval = setInterval(fetchBalance, 15000);
-      return () => clearInterval(interval);
-    }
-  }, [walletAddress]);
+  // Balance fetching and periodic refresh live in the wallet store: it
+  // resolves the Horizon URL from the configured network and refreshes on
+  // connect + on an interval, so it is not duplicated here.
 
   const handleWalletConnect = async (walletType: string) => {
     try {

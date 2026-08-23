@@ -25,7 +25,7 @@ export default function WalletDropdown() {
   const [isOpen, setIsOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const { address, balance, disconnect } = useWalletStore();
+  const { address, balance, balanceError, disconnect } = useWalletStore();
 
   const handleDisconnect = async () => {
     setIsOpen(false);
@@ -98,7 +98,11 @@ export default function WalletDropdown() {
             {truncateAddress(address)}
           </span>
           <span className="text-[10px] text-muted-foreground font-medium">
-            {balance ? `${parseFloat(balance).toFixed(2)} XLM` : '0.00 XLM'}
+            {balanceError
+              ? 'Balance unavailable'
+              : balance
+                ? `${parseFloat(balance).toFixed(2)} XLM`
+                : '0.00 XLM'}
           </span>
         </div>
         <ChevronDown
@@ -129,7 +133,11 @@ export default function WalletDropdown() {
               {address}
             </p>
             <p className="text-xs text-muted-foreground font-medium mt-0.5">
-              {balance ? `${parseFloat(balance).toFixed(4)} XLM` : '0.0000 XLM'}
+              {balanceError
+                ? 'Balance unavailable'
+                : balance
+                  ? `${parseFloat(balance).toFixed(4)} XLM`
+                  : '0.0000 XLM'}
             </p>
           </div>
         </div>
