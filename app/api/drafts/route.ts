@@ -1,34 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { verifyToken } from '@/lib/auth/verifyToken';
+import {
+  listDrafts,
+  saveDraft,
+  validateDraftPayload,
+  draftSerializedSizeBytes,
+  MAX_DRAFT_SIZE_BYTES,
+} from '@/lib/server/draftStore';
 
-// In-memory store for drafts (in production, use a database)
-// Format: { userId: [{ id, title, formData, currentStep, createdAt, updatedAt }] }
-const draftsStore = new Map<string, any[]>();
+// Helper to extract a verified user ID from the token cookie.
+// The token is validated against the API (signature + expiry); the decoded
+// payload is never trusted on its own.
+async function getVerifiedUserId(request: NextRequest): Promise<string | null> {
+  const token = request.cookies.get('token')?.value;
+  if (!token) return null;
 
-const MAX_DRAFTS_PER_USER = 5;
-
-// Helper to extract user ID from token
-function getUserIdFromRequest(request: NextRequest): string | null {
-  try {
-    const token = request.cookies.get('token')?.value;
-    if (!token) return null;
-
-    const payloadSegment = token.split('.')[1];
-    if (!payloadSegment) return null;
-
-    const base64 = payloadSegment.replace(/-/g, '+').replace(/_/g, '/');
-    const jsonPayload = atob(base64);
-    const payload = JSON.parse(jsonPayload);
-
-    return payload.sub || payload.userId || null;
-  } catch {
-    return null;
-  }
+  const verified = await verifyToken(token);
+  return verified?.userId ?? null;
 }
 
 // GET /api/drafts - List all drafts for the current user
 export async function GET(request: NextRequest) {
   try {
-    const userId = getUserIdFromRequest(request);
+    const userId = await getVerifiedUserId(request);
     if (!userId) {
       return NextResponse.json(
         { error: 'Unauthorized' },
@@ -36,7 +30,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const userDrafts = draftsStore.get(userId) || [];
+    const userDrafts = await listDrafts(userId);
     return NextResponse.json(userDrafts);
   } catch (error) {
     console.error('Error fetching drafts:', error);
@@ -50,7 +44,7 @@ export async function GET(request: NextRequest) {
 // POST /api/drafts - Create or update a draft
 export async function POST(request: NextRequest) {
   try {
-    const userId = getUserIdFromRequest(request);
+    const userId = await getVerifiedUserId(request);
     if (!userId) {
       return NextResponse.json(
         { error: 'Unauthorized' },
@@ -58,60 +52,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { id, title, formData, currentStep } = await request.json();
+    const body: unknown = await request.json();
 
-    if (!id) {
+    if (!validateDraftPayload(body)) {
       return NextResponse.json(
-        { error: 'Draft ID is required' },
+        {
+          error:
+            'Invalid draft payload. Expected { id, title, currentStep, formData }',
+        },
         { status: 400 }
       );
     }
 
-    const userDrafts = draftsStore.get(userId) || [];
-    const now = new Date().toISOString();
-
-    // Find existing draft
-    const existingIndex = userDrafts.findIndex((d: any) => d.id === id);
-
-    if (existingIndex >= 0) {
-      // Update existing draft
-      userDrafts[existingIndex] = {
-        ...userDrafts[existingIndex],
-        title,
-        formData,
-        currentStep,
-        updatedAt: now,
-      };
-    } else {
-      // Create new draft - check if user hasn't exceeded limit
-      if (userDrafts.length >= MAX_DRAFTS_PER_USER) {
-        // Delete the oldest draft
-        userDrafts.sort((a: any, b: any) => new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime());
-        userDrafts.shift();
-      }
-
-      userDrafts.push({
-        id,
-        title,
-        formData,
-        currentStep,
-        createdAt: now,
-        updatedAt: now,
-      });
+    if (draftSerializedSizeBytes(body) > MAX_DRAFT_SIZE_BYTES) {
+      return NextResponse.json(
+        { error: 'Draft is too large to save' },
+        { status: 413 }
+      );
     }
 
-    // Sort by updatedAt descending (newest first)
-    userDrafts.sort((a: any, b: any) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
-    draftsStore.set(userId, userDrafts);
+    const saved = await saveDraft(userId, body);
 
-    return NextResponse.json({
-      id,
-      title,
-      formData,
-      currentStep,
-      createdAt: existingIndex >= 0 ? userDrafts[existingIndex]?.createdAt : now,
-      updatedAt: now,
-    });
+    return NextResponse.json(saved);
   } catch (error) {
     console.error('Error saving draft:', error);
     return NextResponse.json(
