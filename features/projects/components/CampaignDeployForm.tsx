@@ -18,10 +18,12 @@ interface CampaignDeployFormProps {
 }
 
 interface DeployState {
-  status: 'idle' | 'signing' | 'deploying' | 'success' | 'error';
+  status: 'idle' | 'deploying' | 'success' | 'error';
   message?: string;
   campaignId?: string;
   txHash?: string;
+  contractId?: string;
+  network?: string;
   error?: string;
 }
 
@@ -30,6 +32,13 @@ const CONTRACT_PARAMETERS = {
   ESTIMATED_OPERATION_FEE: 0.1,
   TOTAL_ESTIMATED_FEE: 0.6,
 };
+
+const CONFIGURED_NETWORK = process.env.NEXT_PUBLIC_STELLAR_NETWORK || 'testnet';
+
+function explorerUrl(txHash: string, network: string): string {
+  const net = network === 'mainnet' ? 'mainnet' : 'testnet';
+  return `https://stellar.expert/explorer/${net}/tx/${txHash}`;
+}
 
 export const CampaignDeployForm: React.FC<CampaignDeployFormProps> = ({
   formData,
@@ -43,42 +52,59 @@ export const CampaignDeployForm: React.FC<CampaignDeployFormProps> = ({
 
   const campaignTitle = (formData.title as string) || 'Campaign';
   const goalAmount = (formData.goalAmount as number) || 0;
-  const network = (formData.network as string) || 'Mainnet';
+  const network = CONFIGURED_NETWORK;
   const acceptedAssets = (formData.acceptedAssets as string[]) || [];
   const duration = (formData.campaignDuration as number) || 0;
 
   const handleDeploy = async () => {
     try {
       setDeployState({
-        status: 'signing',
-        message: 'Waiting for wallet signature...',
-      });
-
-      // Simulate wallet signing delay
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-
-      setDeployState({
         status: 'deploying',
         message: 'Deploying campaign to Stellar blockchain...',
       });
 
-      // Simulate deployment delay
-      await new Promise((resolve) => setTimeout(resolve, 3000));
+      // Real submission: the server builds, signs (platform admin key), and
+      // submits the Soroban invocation, then registers the campaign with the
+      // backend. Every value below is real; failures surface specific errors.
+      const response = await fetch('/api/campaigns/deploy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: campaignTitle,
+          goalAmount,
+          campaignDurationDays: duration,
+          acceptedAssets: acceptedAssets.map((code) => ({ code })),
+          minDonationAmount: 0.001,
+        }),
+      });
 
-      // Mock successful deployment
-      const mockCampaignId = `campaign_${Date.now()}`;
-      const mockTxHash = `aca${Math.random().toString(16).slice(2, 64)}`;
+      const payload = (await response.json().catch(() => null)) as {
+        error?: string;
+        data?: { campaignId?: string; txHash?: string; contractId?: string; network?: string };
+      } | null;
+
+      if (!response.ok) {
+        throw new Error(payload?.error || 'Campaign deployment failed');
+      }
+
+      const { campaignId, txHash, contractId, network: deployedNetwork } = payload?.data ?? {};
+
+      if (!campaignId || !txHash) {
+        throw new Error('Deployment returned incomplete data');
+      }
 
       setDeployState({
         status: 'success',
         message: 'Campaign deployed successfully!',
-        campaignId: mockCampaignId,
-        txHash: mockTxHash,
+        campaignId,
+        txHash,
+        contractId,
+        network: deployedNetwork,
       });
 
       // Redirect after 3 seconds
       setTimeout(() => {
-        onSuccess(mockCampaignId);
+        onSuccess(campaignId);
       }, 3000);
     } catch (err) {
       setDeployState({
@@ -139,6 +165,15 @@ export const CampaignDeployForm: React.FC<CampaignDeployFormProps> = ({
                 <code className="text-sm font-mono bg-white px-3 py-2 rounded border flex-1 text-left truncate">
                   {deployState.txHash}
                 </code>
+                <a
+                  href={explorerUrl(deployState.txHash || '', deployState.network || '')}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="p-2 hover:bg-green-100 rounded transition-colors"
+                  title="View on Stellar Expert"
+                >
+                  <ExternalLink className="w-4 h-4 text-gray-600" />
+                </a>
                 <button
                   onClick={() => copyToClipboard(deployState.txHash || '')}
                   className="p-2 hover:bg-green-100 rounded transition-colors"
@@ -148,9 +183,18 @@ export const CampaignDeployForm: React.FC<CampaignDeployFormProps> = ({
               </div>
             </div>
 
+            {deployState.contractId && (
+              <div>
+                <p className="text-xs text-gray-600 font-medium mb-1">Contract</p>
+                <code className="text-sm font-mono bg-white px-3 py-2 rounded border flex-1 text-left break-all block">
+                  {deployState.contractId}
+                </code>
+              </div>
+            )}
+
             <div>
               <p className="text-xs text-gray-600 font-medium mb-1">Network</p>
-              <p className="text-sm font-medium text-gray-900">{network}</p>
+              <p className="text-sm font-medium text-gray-900">{deployState.network || network}</p>
             </div>
           </div>
 
@@ -190,10 +234,10 @@ export const CampaignDeployForm: React.FC<CampaignDeployFormProps> = ({
           <p className="text-sm text-blue-900">
             <strong>Troubleshooting:</strong>
             <ul className="mt-2 space-y-1 list-disc list-inside">
-              <li>Ensure you have sufficient balance for the network fee</li>
-              <li>Check your wallet connection and try again</li>
-              <li>Make sure you're on the correct blockchain network</li>
-              <li>Try a different wallet if available</li>
+              <li>Ensure the deployment is configured (contract id, admin key, Soroban RPC)</li>
+              <li>Make sure the admin account is funded on the target network</li>
+              <li>Check that you are signed in so the campaign can be registered</li>
+              <li>Try again if the Soroban RPC was temporarily unavailable</li>
             </ul>
           </p>
         </div>
@@ -213,12 +257,10 @@ export const CampaignDeployForm: React.FC<CampaignDeployFormProps> = ({
     );
   }
 
-  // Show deploying/signing screen
-  const inProgressStatus: 'signing' | 'deploying' = deployState.status === 'signing' || deployState.status === 'deploying'
-    ? deployState.status
-    : 'signing';
+  // Show deploying screen
+  const isDeploying = deployState.status === 'deploying';
 
-  if (inProgressStatus) {
+  if (isDeploying) {
     return (
       <div className="space-y-6">
         <div className="text-center py-16">
@@ -226,14 +268,11 @@ export const CampaignDeployForm: React.FC<CampaignDeployFormProps> = ({
             <Loader className="w-8 h-8 text-blue-600 animate-spin" />
           </div>
           <h2 className="text-2xl font-bold text-gray-900 mb-2">
-            {inProgressStatus === 'signing'
-              ? 'Waiting for Signature'
-              : 'Deploying Campaign'}
+            Deploying Campaign
           </h2>
           <p className="text-gray-600">
-            {inProgressStatus === 'signing'
-              ? 'Please sign the transaction in your wallet'
-              : 'Your campaign is being deployed to the Stellar blockchain...'}
+            Submitting the signed transaction to the Soroban RPC and registering
+            the campaign with the backend...
           </p>
 
           {/* Progress indicators */}
@@ -248,46 +287,28 @@ export const CampaignDeployForm: React.FC<CampaignDeployFormProps> = ({
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-semibold ${
-                  inProgressStatus === 'signing'
-                    ? 'bg-blue-600 text-white animate-pulse'
-                    : 'bg-blue-600 text-white'
-                }`}
-              >
-                {inProgressStatus === 'deploying' ? '✓' : '2'}
+              <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center flex-shrink-0 text-sm font-semibold animate-pulse">
+                <Loader className="w-4 h-4 animate-spin" />
               </div>
               <div className="text-left">
                 <p className="text-sm font-medium text-gray-900">
-                  {inProgressStatus === 'signing' ? 'Wallet Signing' : 'Signed'}
+                  On-chain Deployment
                 </p>
                 <p className="text-xs text-gray-500">
-                  {inProgressStatus === 'signing'
-                    ? 'Awaiting signature...'
-                    : 'Transaction signed'}
+                  Building, signing, and submitting to Soroban...
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-semibold ${
-                  inProgressStatus === 'deploying'
-                    ? 'bg-blue-600 text-white animate-pulse'
-                    : 'bg-gray-300 text-gray-700'
-                }`}
-              >
-                {inProgressStatus === 'deploying' ? (
-                  <Loader className="w-4 h-4 animate-spin" />
-                ) : (
-                  '3'
-                )}
+              <div className="w-8 h-8 rounded-full bg-gray-300 text-gray-700 flex items-center justify-center flex-shrink-0 text-sm font-semibold">
+                3
               </div>
               <div className="text-left">
                 <p className="text-sm font-medium text-gray-900">
-                  Blockchain Deployment
+                  Backend Registration
                 </p>
                 <p className="text-xs text-gray-500">
-                  Securing on Stellar...
+                  Registering the campaign with OrbitChain-API...
                 </p>
               </div>
             </div>
@@ -307,8 +328,9 @@ export const CampaignDeployForm: React.FC<CampaignDeployFormProps> = ({
           Deploy Campaign
         </h2>
         <p className="text-gray-600">
-          Review the deployment parameters and sign with your wallet to deploy
-          your campaign on the Stellar blockchain.
+          Review the deployment parameters and deploy your campaign on the
+          Stellar blockchain. The transaction is signed with the platform
+          admin key and submitted to the configured Soroban RPC.
         </p>
       </div>
 
