@@ -163,8 +163,12 @@ export async function saveDraft(
     let saved: ProjectDraft;
 
     if (existingIndex >= 0) {
+      const existing = drafts[existingIndex];
+      if (!existing) {
+        throw new Error('Draft store inconsistency: index resolved but draft missing');
+      }
       saved = {
-        ...drafts[existingIndex],
+        ...existing,
         title: payload.title,
         formData: payload.formData,
         currentStep: payload.currentStep,

@@ -1,22 +1,37 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import type { WalletStore } from '@/types';
+import { fetchNativeBalance } from '@/lib/stellar/balance';
+import { resolveHorizonUrl } from '@/lib/stellar/config';
 
-const fetchBalance = async (address: string, set: any) => {
-  try {
-    const res = await fetch(`https://horizon-testnet.stellar.org/accounts/${address}`);
-    if (res.ok) {
-      const data = await res.json();
-      const native = data.balances.find((b: any) => b.asset_type === 'native');
-      set({ balance: native ? native.balance : '0.0000000' });
-    } else {
-      set({ balance: '0.0000000' });
-    }
-  } catch (err) {
-    console.error('Error fetching balance:', err);
-    set({ balance: '0.0000000' });
+/** How often the connected wallet's balance is re-fetched. */
+const REFRESH_INTERVAL_MS = 15_000;
+
+let refreshTimer: ReturnType<typeof setInterval> | null = null;
+
+function stopBalanceRefresh(): void {
+  if (refreshTimer !== null) {
+    clearInterval(refreshTimer);
+    refreshTimer = null;
   }
-};
+}
+
+/**
+ * Fetches the native balance from the configured network's Horizon server and
+ * writes it into the store. Lookup failures set `balanceError` instead of a
+ * silently wrong balance; a 404 (account not on the ledger) is a valid zero.
+ */
+async function refreshBalance(
+  address: string,
+  set: (partial: Partial<WalletStore>) => void,
+): Promise<void> {
+  const result = await fetchNativeBalance(address, resolveHorizonUrl());
+  if (result.error) {
+    set({ balanceError: result.error });
+  } else {
+    set({ balance: result.balance, balanceError: null });
+  }
+}
 
 export const useWalletStore = create<WalletStore>()(
   devtools(
@@ -25,30 +40,48 @@ export const useWalletStore = create<WalletStore>()(
       connectedWallet: null,
       address: null,
       balance: null,
+      balanceError: null,
       isConnecting: false,
       error: null,
 
       // Actions
       connect: (wallet, address) => {
+        stopBalanceRefresh();
         set({
           connectedWallet: wallet,
           address: address,
           isConnecting: false,
           error: null,
+          balanceError: null,
         });
-        fetchBalance(address, set);
+        // Fetch immediately on connect, then keep the balance fresh without
+        // requiring user action.
+        void refreshBalance(address, set);
+        refreshTimer = setInterval(() => {
+          void refreshBalance(address, set);
+        }, REFRESH_INTERVAL_MS);
       },
 
-      disconnect: () =>
+      disconnect: () => {
+        stopBalanceRefresh();
         set({
           connectedWallet: null,
           address: null,
           balance: null,
+          balanceError: null,
           isConnecting: false,
           error: null,
-        }),
+        });
+      },
 
       setBalance: (balance) => set({ balance }),
+
+      refreshBalance: async () => {
+        const { address } = useWalletStore.getState();
+        if (address) {
+          await refreshBalance(address, set);
+        }
+      },
 
       setConnecting: (connecting) => set({ isConnecting: connecting }),
 

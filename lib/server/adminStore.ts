@@ -203,7 +203,9 @@ export function createUser(data: Partial<AdminUser>): AdminUser {
 export function updateUserById(id: string, patch: Partial<AdminUser>): AdminUser | undefined {
   const index = users.findIndex((u) => u.id === id);
   if (index === -1) return undefined;
-  users[index] = { ...users[index], ...patch };
+  const current = users[index];
+  if (!current) return undefined;
+  users[index] = { ...current, ...patch };
   return users[index];
 }
 
@@ -217,21 +219,27 @@ export function deleteUserById(id: string): boolean {
 export function setUserRole(id: string, role: AdminUserRole): AdminUser | undefined {
   const index = users.findIndex((u) => u.id === id);
   if (index === -1) return undefined;
-  users[index] = { ...users[index], role };
+  const current = users[index];
+  if (!current) return undefined;
+  users[index] = { ...current, role };
   return users[index];
 }
 
 export function setUserKycStatus(id: string, status: AdminKycStatus): AdminUser | undefined {
   const index = users.findIndex((u) => u.id === id);
   if (index === -1) return undefined;
-  users[index] = { ...users[index], kycStatus: status };
+  const current = users[index];
+  if (!current) return undefined;
+  users[index] = { ...current, kycStatus: status };
   return users[index];
 }
 
 export function toggleUserSuspension(id: string): AdminUser | undefined {
   const index = users.findIndex((u) => u.id === id);
   if (index === -1) return undefined;
-  users[index] = { ...users[index], isSuspended: !users[index].isSuspended };
+  const current = users[index];
+  if (!current) return undefined;
+  users[index] = { ...current, isSuspended: !current.isSuspended };
   return users[index];
 }
 
@@ -272,8 +280,10 @@ export function deleteWithdrawalById(id: string): boolean {
 export function approveWithdrawal(id: string): AdminWithdrawal | undefined {
   const index = withdrawals.findIndex((w) => w.id === id);
   if (index === -1) return undefined;
+  const current = withdrawals[index];
+  if (!current) return undefined;
   withdrawals[index] = {
-    ...withdrawals[index],
+    ...current,
     status: 'APPROVED',
     processedDate: new Date().toISOString(),
   };
@@ -283,8 +293,10 @@ export function approveWithdrawal(id: string): AdminWithdrawal | undefined {
 export function rejectWithdrawal(id: string, reason: string): AdminWithdrawal | undefined {
   const index = withdrawals.findIndex((w) => w.id === id);
   if (index === -1) return undefined;
+  const current = withdrawals[index];
+  if (!current) return undefined;
   withdrawals[index] = {
-    ...withdrawals[index],
+    ...current,
     status: 'REJECTED',
     processedDate: new Date().toISOString(),
     rejectionReason: reason,
@@ -295,8 +307,10 @@ export function rejectWithdrawal(id: string, reason: string): AdminWithdrawal | 
 export function completeWithdrawal(id: string, transactionHash: string): AdminWithdrawal | undefined {
   const index = withdrawals.findIndex((w) => w.id === id);
   if (index === -1) return undefined;
+  const current = withdrawals[index];
+  if (!current) return undefined;
   withdrawals[index] = {
-    ...withdrawals[index],
+    ...current,
     status: 'COMPLETED',
     processedDate: new Date().toISOString(),
     transactionHash,

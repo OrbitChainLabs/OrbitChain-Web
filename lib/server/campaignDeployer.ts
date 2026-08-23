@@ -33,9 +33,10 @@ import {
   Address,
   Keypair,
   Operation,
-  SorobanRpc,
   TransactionBuilder,
-  scval,
+  nativeToScVal,
+  rpc,
+  xdr,
 } from '@stellar/stellar-sdk';
 import { env } from '@/lib/env';
 
@@ -74,6 +75,26 @@ function descriptionHash(title: string): Buffer {
   return createHash('sha256')
     .update(`orbitchain-campaign:${title}`)
     .digest();
+}
+
+/**
+ * Builds a Soroban map scval with symbol keys from [key, value] entries.
+ * Symbol keys match the serialization that `#[derive(Serialize)]` contract
+ * structs expect on-chain; plain string keys would not deserialize. Keys are
+ * sorted, matching the SDK's own map conversion (the Soroban runtime expects
+ * sorted map keys).
+ */
+function scMap(entries: Array<[string, xdr.ScVal]>): xdr.ScVal {
+  const sorted = [...entries].sort(([a], [b]) => a.localeCompare(b));
+  return xdr.ScVal.scvMap(
+    sorted.map(
+      ([key, value]) =>
+        new xdr.ScMapEntry({
+          key: nativeToScVal(key, { type: 'symbol' }),
+          val: value,
+        }),
+    ),
+  );
 }
 
 function requireConfig(value: string | undefined, name: string): string {
@@ -140,7 +161,7 @@ export async function deployCampaign(
   const minDonationStroops = stroops(input.minDonationAmount ?? 0.001);
 
   // ── Build contract arguments (per the canonical campaign contract) ───────
-  const acceptedAssetsScVal = scval.toVec(
+  const acceptedAssetsScVal = nativeToScVal(
     input.acceptedAssets.map((asset) => {
       const code = asset.code.trim().toUpperCase();
       if (code !== 'XLM' && !asset.contractId) {
@@ -150,39 +171,39 @@ export async function deployCampaign(
             `Only native XLM has no issuer.`,
         );
       }
-      return scval.toMap([
-        [scval.toSymbol('asset_code'), scval.toString(code)],
+      return scMap([
+        ['asset_code', nativeToScVal(code)],
         [
-          scval.toSymbol('issuer'),
+          'issuer',
           asset.contractId
-            ? scval.toAddress(new Address(asset.contractId))
-            : scval.toVoid(),
+            ? nativeToScVal(new Address(asset.contractId), { type: 'address' })
+            : nativeToScVal(undefined),
         ],
       ]);
     }),
   );
 
-  const milestoneScVal = scval.toMap([
-    [scval.toSymbol('index'), scval.toU32(0)],
-    [scval.toSymbol('target_amount'), scval.toI128(goalStroops)],
-    [scval.toSymbol('released_amount'), scval.toI128(0n)],
-    [scval.toSymbol('description_hash'), scval.toBytes(descriptionHash(input.title))],
-    [scval.toSymbol('status'), scval.toU32(0)], // MilestoneStatus::Locked
-    [scval.toSymbol('released_at'), scval.toVoid()],
+  const milestoneScVal = scMap([
+    ['index', nativeToScVal(0, { type: 'u32' })],
+    ['target_amount', nativeToScVal(goalStroops, { type: 'i128' })],
+    ['released_amount', nativeToScVal(0n, { type: 'i128' })],
+    ['description_hash', nativeToScVal(descriptionHash(input.title))],
+    ['status', nativeToScVal(0, { type: 'u32' })], // MilestoneStatus::Locked
+    ['released_at', nativeToScVal(undefined)],
   ]);
-  const milestonesScVal = scval.toVec([milestoneScVal]);
+  const milestonesScVal = nativeToScVal([milestoneScVal]);
 
   const invokeArgs = [
-    scval.toAddress(new Address(creatorAddress)),
-    scval.toI128(goalStroops),
-    scval.toU64(BigInt(endTime)),
+    nativeToScVal(new Address(creatorAddress), { type: 'address' }),
+    nativeToScVal(goalStroops, { type: 'i128' }),
+    nativeToScVal(BigInt(endTime), { type: 'u64' }),
     acceptedAssetsScVal,
     milestonesScVal,
-    scval.toI128(minDonationStroops),
+    nativeToScVal(minDonationStroops, { type: 'i128' }),
   ];
 
   // ── Submit to Soroban RPC ────────────────────────────────────────────────
-  const server = new SorobanRpc.Server(sorobanRpcUrl);
+  const server = new rpc.Server(sorobanRpcUrl);
 
   let account;
   try {
@@ -209,14 +230,15 @@ export async function deployCampaign(
     .build();
 
   const simulation = await server.simulateTransaction(transaction);
-  if (SorobanRpc.isSimulationError(simulation)) {
+  if (rpc.Api.isSimulationError(simulation)) {
     throw new Error(`Soroban simulation rejected the deployment: ${simulation.error}`);
   }
 
-  const assembled = SorobanRpc.assembleTransaction(transaction, simulation).sign(adminKeypair);
+  const assembled = rpc.assembleTransaction(transaction, simulation).build();
+  assembled.sign(adminKeypair);
   const sendResult = await server.sendTransaction(assembled);
-  if (sendResult.status === 'ERROR' || sendResult.status === 'FAILED') {
-    throw new Error(`Soroban rejected the deployment transaction: ${sendResult.errorResult?.resultXdr ?? sendResult.status}`);
+  if (sendResult.status === 'ERROR') {
+    throw new Error(`Soroban rejected the deployment transaction: ${sendResult.errorResult?.toXDR('base64') ?? sendResult.status}`);
   }
 
   const txHash = sendResult.hash;
@@ -242,7 +264,7 @@ export async function deployCampaign(
   }
 
   // ── Register with the backend so the returned campaign id is real ───────
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
   let campaignId: string;
 
   try {

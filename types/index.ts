@@ -35,6 +35,8 @@ export interface WalletState {
   connectedWallet: string | null;
   address: string | null;
   balance: string | null;
+  /** Set when the last balance lookup failed; distinct from a zero balance. */
+  balanceError: string | null;
   isConnecting: boolean;
   error: string | null;
 }
@@ -43,6 +45,7 @@ export interface WalletActions {
   connect: (wallet: string, address: string) => void;
   disconnect: () => void;
   setBalance: (balance: string) => void;
+  refreshBalance: () => Promise<void>;
   setConnecting: (connecting: boolean) => void;
   setError: (error: string | null) => void;
 }
