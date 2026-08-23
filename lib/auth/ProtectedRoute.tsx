@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuthStore } from "@/store/authStore";
+import { verifyToken } from "@/lib/auth/verifyToken";
 import type { User } from "@/types";
 
 // Role type for access control
@@ -16,25 +17,6 @@ interface ProtectedRouteProps {
   fallbackPath?: string;
   loadingComponent?: React.ReactNode;
 }
-
-// JWT token validation utility
-const isTokenValid = (token: string): boolean => {
-  try {
-    // Decode JWT payload (without verification for simplicity)
-    const payloadSegment = token.split(".")[1];
-    if (!payloadSegment) {
-      return false;
-    }
-    const payload = JSON.parse(atob(payloadSegment));
-    const currentTime = Date.now() / 1000;
-
-    // Check if token is expired
-    return payload.exp > currentTime;
-  } catch (error) {
-    console.error("Invalid token format:", error);
-    return false;
-  }
-};
 
 // Check if user has required role
 const hasRequiredRole = (
@@ -88,8 +70,9 @@ export function ProtectedRoute({
         return;
       }
 
-      // Check if user is authenticated and token is valid
-      const isTokenValidValue = token ? isTokenValid(token) : false;
+      // Check if user is authenticated and token is valid (verified against
+      // the API — a bare decode is never trusted)
+      const isTokenValidValue = token ? (await verifyToken(token)) !== null : false;
       const isUserAuthenticated = isAuthenticated && isTokenValidValue;
 
       if (!isUserAuthenticated) {

@@ -1,13 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import type { CampaignShareStats, ApiResponse } from '@/types/api';
-
-// Shared storage reference (would be from database in production)
-// For demo, we'll store stats in-memory
-const shareStats: Record<string, Record<string, number>> = {};
+import { getShareStats } from '@/lib/server/shareStore';
 
 /**
  * GET /api/campaigns/[id]/shares/stats
- * Gets share statistics for a campaign
+ * Gets share statistics for a campaign from the shared durable store.
  */
 export async function GET(
   request: NextRequest,
@@ -15,31 +12,11 @@ export async function GET(
 ) {
   try {
     const campaignId = params.id;
-
-    // Get stats for this campaign or return defaults
-    const stats = shareStats[campaignId] || {
-      twitter: 0,
-      linkedin: 0,
-      whatsapp: 0,
-      copy: 0,
-    };
-
-    const totalShares = Object.values(stats).reduce((sum, count) => sum + count, 0);
-
-    const response: CampaignShareStats = {
-      campaignId,
-      totalShares,
-      shares: {
-        twitter: stats.twitter ?? 0,
-        linkedin: stats.linkedin ?? 0,
-        whatsapp: stats.whatsapp ?? 0,
-        copy: stats.copy ?? 0,
-      },
-    };
+    const stats = await getShareStats(campaignId);
 
     return NextResponse.json<ApiResponse<CampaignShareStats>>(
       {
-        data: response,
+        data: stats,
         status: 200,
       },
       { status: 200 }

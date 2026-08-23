@@ -3,6 +3,7 @@
 import { useEffect, useRef, useCallback } from "react";
 import { useAuthStore } from "@/store/authStore";
 import { authApi } from "@/lib/api/auth";
+import { verifyToken } from "@/lib/auth/verifyToken";
 
 // Session timeout configuration
 const WARNING_THRESHOLD = 5 * 60 * 1000; // 5 minutes in milliseconds
@@ -23,7 +24,10 @@ export interface SessionTimeoutState {
   isRefreshing: boolean;
 }
 
-// JWT token utilities
+// JWT token utilities.
+// NOTE: getTokenExpirationTime only reads the `exp` claim to drive the
+// countdown UI. It never authorizes anything — session validity is decided by
+// verifySession() below, which asks the API to verify the token's signature.
 const getTokenExpirationTime = (token: string): number | null => {
   try {
     const payloadSegment = token.split(".")[1];
@@ -38,18 +42,21 @@ const getTokenExpirationTime = (token: string): number | null => {
   }
 };
 
-const isTokenExpired = (token: string): boolean => {
-  const expirationTime = getTokenExpirationTime(token);
-  if (!expirationTime) return true;
-  
-  return Date.now() >= expirationTime;
-};
-
 const getTimeRemaining = (token: string): number => {
   const expirationTime = getTokenExpirationTime(token);
   if (!expirationTime) return 0;
   
   return Math.max(0, expirationTime - Date.now());
+};
+
+// Display-only helper (used by the unreferenced SessionTimeoutDemo debug
+// panel). It does not authorize anything — real session validity is decided
+// by verifySession().
+const isTokenExpired = (token: string): boolean => {
+  const expirationTime = getTokenExpirationTime(token);
+  if (!expirationTime) return true;
+  
+  return Date.now() >= expirationTime;
 };
 
 // Session timeout hook
@@ -79,6 +86,13 @@ export function useSessionTimeout(options: SessionTimeoutOptions = {}) {
       warningTimeoutRef.current = null;
     }
   }, []);
+
+  // Verify the token against the API (signature + expiry). A forged, expired,
+  // or unverifiable token is treated as an expired session.
+  const verifySession = useCallback(async (): Promise<boolean> => {
+    if (!token) return false;
+    return (await verifyToken(token)) !== null;
+  }, [token]);
 
   // Handle session expiration
   const handleExpiration = useCallback(async () => {
@@ -139,38 +153,42 @@ export function useSessionTimeout(options: SessionTimeoutOptions = {}) {
     if (!token) return;
     
     cleanup();
-    
-    // Check token immediately
-    if (isTokenExpired(token)) {
-      handleExpiration();
-      return;
-    }
-    
-    // Set up periodic checks
-    intervalRef.current = setInterval(() => {
+
+    // One verification pass: verify the token, then schedule the expiry
+    // warning. Called immediately and then on the check interval.
+    const checkSession = async () => {
       if (!token) {
         cleanup();
         return;
       }
-      
-      const timeRemaining = getTimeRemaining(token);
-      
-      if (timeRemaining === 0) {
+
+      // Session validity is decided by API verification, not a bare decode.
+      const valid = await verifySession();
+      if (!valid) {
         handleExpiration();
         return;
       }
-      
+
+      const timeRemaining = getTimeRemaining(token);
+
       // Show warning when approaching expiration
       if (timeRemaining <= warningThreshold && !warningTimeoutRef.current) {
         onWarning?.(timeRemaining);
-        
+
         // Set timeout for actual expiration
         warningTimeoutRef.current = setTimeout(() => {
           handleExpiration();
         }, timeRemaining);
       }
+    };
+
+    void checkSession();
+
+    // Set up periodic checks
+    intervalRef.current = setInterval(() => {
+      void checkSession();
     }, checkInterval);
-  }, [token, cleanup, handleExpiration, onWarning, warningThreshold, checkInterval]);
+  }, [token, cleanup, verifySession, handleExpiration, onWarning, warningThreshold, checkInterval]);
 
   // Effect to manage session monitoring
   useEffect(() => {

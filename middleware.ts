@@ -1,32 +1,8 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { verifyToken } from '@/lib/auth/verifyToken';
 
-const JWT_HEADER_REGEX = /^[A-Za-z0-9-_=]+\.[A-Za-z0-9-_=]+\.?[A-Za-z0-9-_.+/=]*$/;
-
-// Simple server-side JWT verification for expiration
-function isTokenValid(token: string): boolean {
-  try {
-    if (!token || !JWT_HEADER_REGEX.test(token)) {
-      return false;
-    }
-    const payloadSegment = token.split('.')[1];
-    if (!payloadSegment) {
-      return false;
-    }
-    // Base64URL decode
-    const base64 = payloadSegment.replace(/-/g, '+').replace(/_/g, '/');
-    const jsonPayload = atob(base64);
-    const payload = JSON.parse(jsonPayload);
-    const currentTime = Date.now() / 1000;
-
-    // Check if exp claim exists and is in the future
-    return typeof payload.exp === 'number' && payload.exp > currentTime;
-  } catch (error) {
-    return false;
-  }
-}
-
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const token = request.cookies.get('token')?.value;
   const { pathname, search } = request.nextUrl;
 
@@ -37,7 +13,10 @@ export function middleware(request: NextRequest) {
     pathname.startsWith('/profile');
 
   if (isProtectedRoute) {
-    if (!token || !isTokenValid(token)) {
+    // Verified against the API (signature + expiry), never a bare decode.
+    const verified = token ? await verifyToken(token) : null;
+
+    if (!verified) {
       const redirectUrl = encodeURIComponent(pathname + search);
       const url = request.nextUrl.clone();
       url.pathname = '/connect';

@@ -1,13 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
-import type { CreateShareRequest, ShareRecord, ApiResponse } from '@/types/api';
+import { StrKey } from '@stellar/stellar-sdk';
+import type { ShareRecord, ApiResponse } from '@/types/api';
+import {
+  recordShare,
+  SHARE_PLATFORMS,
+  type SharePlatform,
+} from '@/lib/server/shareStore';
 
-// In-memory storage for shares (in production, this would be a database)
-const shareRecords: ShareRecord[] = [];
-const shareStats: Record<string, Record<string, number>> = {};
+interface ShareRequestBody {
+  platform?: unknown;
+  walletAddress?: unknown;
+}
 
 /**
  * POST /api/campaigns/[id]/shares
- * Records a share event for a campaign
+ * Records a share event for a campaign. Requires the sharer's wallet address
+ * so repeated shares from the same wallet within a bounded window are not
+ * double-counted.
  */
 export async function POST(
   request: NextRequest,
@@ -15,47 +24,46 @@ export async function POST(
 ) {
   try {
     const campaignId = params.id;
-    const body = (await request.json()) as CreateShareRequest;
+    const body = (await request.json()) as ShareRequestBody;
 
-    if (!body.platform || !['twitter', 'linkedin', 'whatsapp', 'copy'].includes(body.platform)) {
+    if (
+      typeof body.platform !== 'string' ||
+      !SHARE_PLATFORMS.includes(body.platform as SharePlatform)
+    ) {
       return NextResponse.json(
         { message: 'Invalid platform' },
         { status: 400 }
       );
     }
 
-    // Create share record
-    const shareRecord: ShareRecord = {
-      id: `share_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+    if (
+      typeof body.walletAddress !== 'string' ||
+      !StrKey.isValidEd25519PublicKey(body.walletAddress.trim())
+    ) {
+      return NextResponse.json(
+        { message: 'A valid wallet address is required to record a share' },
+        { status: 400 }
+      );
+    }
+
+    const platform = body.platform as SharePlatform;
+    const walletAddress = body.walletAddress.trim();
+
+    const { recorded, record } = await recordShare(
       campaignId,
-      platform: body.platform,
-      createdAt: new Date().toISOString(),
-    };
-
-    // Store in memory (would be DB in production)
-    shareRecords.push(shareRecord);
-
-    // Update share stats
-    if (!shareStats[campaignId]) {
-      shareStats[campaignId] = {
-        twitter: 0,
-        linkedin: 0,
-        whatsapp: 0,
-        copy: 0,
-      };
-    }
-    const campaignStats = shareStats[campaignId];
-    if (campaignStats) {
-      campaignStats[body.platform] = (campaignStats[body.platform] ?? 0) + 1;
-    }
+      walletAddress,
+      platform
+    );
 
     return NextResponse.json<ApiResponse<ShareRecord>>(
       {
-        data: shareRecord,
-        status: 201,
-        message: 'Share recorded successfully',
+        data: record,
+        status: recorded ? 201 : 200,
+        message: recorded
+          ? 'Share recorded successfully'
+          : 'Share already recorded for this wallet',
       },
-      { status: 201 }
+      { status: recorded ? 201 : 200 }
     );
   } catch (error) {
     console.error('Error recording share:', error);
