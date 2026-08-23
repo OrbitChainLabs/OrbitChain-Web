@@ -1,25 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { verifyToken } from '@/lib/auth/verifyToken';
+import { getDraft, deleteDraft } from '@/lib/server/draftStore';
 
-// In-memory store for drafts (same as route.ts)
-const draftsStore = new Map<string, any[]>();
+// Helper to extract a verified user ID from the token cookie.
+// The token is validated against the API (signature + expiry); the decoded
+// payload is never trusted on its own.
+async function getVerifiedUserId(request: NextRequest): Promise<string | null> {
+  const token = request.cookies.get('token')?.value;
+  if (!token) return null;
 
-// Helper to extract user ID from token
-function getUserIdFromRequest(request: NextRequest): string | null {
-  try {
-    const token = request.cookies.get('token')?.value;
-    if (!token) return null;
-
-    const payloadSegment = token.split('.')[1];
-    if (!payloadSegment) return null;
-
-    const base64 = payloadSegment.replace(/-/g, '+').replace(/_/g, '/');
-    const jsonPayload = atob(base64);
-    const payload = JSON.parse(jsonPayload);
-
-    return payload.sub || payload.userId || null;
-  } catch {
-    return null;
-  }
+  const verified = await verifyToken(token);
+  return verified?.userId ?? null;
 }
 
 // GET /api/drafts/[id] - Get a specific draft
@@ -28,7 +19,7 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const userId = getUserIdFromRequest(request);
+    const userId = await getVerifiedUserId(request);
     if (!userId) {
       return NextResponse.json(
         { error: 'Unauthorized' },
@@ -36,8 +27,7 @@ export async function GET(
       );
     }
 
-    const userDrafts = draftsStore.get(userId) || [];
-    const draft = userDrafts.find((d: any) => d.id === params.id);
+    const draft = await getDraft(userId, params.id);
 
     if (!draft) {
       return NextResponse.json(
@@ -62,7 +52,7 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const userId = getUserIdFromRequest(request);
+    const userId = await getVerifiedUserId(request);
     if (!userId) {
       return NextResponse.json(
         { error: 'Unauthorized' },
@@ -70,17 +60,14 @@ export async function DELETE(
       );
     }
 
-    const userDrafts = draftsStore.get(userId) || [];
-    const filteredDrafts = userDrafts.filter((d: any) => d.id !== params.id);
+    const deleted = await deleteDraft(userId, params.id);
 
-    if (filteredDrafts.length === userDrafts.length) {
+    if (!deleted) {
       return NextResponse.json(
         { error: 'Draft not found' },
         { status: 404 }
       );
     }
-
-    draftsStore.set(userId, filteredDrafts);
 
     return NextResponse.json({ success: true });
   } catch (error) {
