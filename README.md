@@ -203,6 +203,7 @@ npm start
 | `start` | `npm run start` | Start production server |
 | `lint` | `npm run lint` | Run ESLint |
 | `type-check` | `npm run type-check` | Run TypeScript type checking |
+| `test` | `npm test` | Run the test suite (env-contract regression tests) |
 | `storybook` | `npm run storybook` | Launch Storybook component library |
 | `build-storybook` | `npm run build-storybook` | Build Storybook for deployment |
 
@@ -250,14 +251,17 @@ We welcome contributions! Please follow these guidelines:
 ## 🧪 Testing
 
 ```bash
-# Run Storybook component tests
-npm run storybook
+# Run the test suite (environment-contract regression tests)
+npm test
 
 # Run type checking
 npm run type-check
 
 # Run linter
 npm run lint
+
+# Run Storybook component tests
+npm run storybook
 ```
 
 ---

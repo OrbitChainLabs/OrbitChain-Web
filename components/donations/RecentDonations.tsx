@@ -34,7 +34,7 @@ const HORIZON_EXPLORER =
   process.env.NEXT_PUBLIC_STELLAR_EXPLORER_URL ||
   'https://stellar.expert/explorer/testnet/tx';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 const PAGE_SIZE = 10;
 

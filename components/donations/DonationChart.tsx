@@ -35,7 +35,7 @@ interface RangeOption {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 const RANGES: RangeOption[] = [
   { label: '7D',    value: '7d',  days: 7   },

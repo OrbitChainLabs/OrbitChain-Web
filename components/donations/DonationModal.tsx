@@ -170,7 +170,7 @@ export function DonationModal({
 
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 5000);
-    const apiBaseUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api').replace(/\/+$/, '');
+    const apiBaseUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001').replace(/\/+$/, '');
     try {
       const response = await fetch(`${apiBaseUrl}/donations/confirmation-email`, {
         method: 'POST',
