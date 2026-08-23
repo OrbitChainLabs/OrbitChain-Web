@@ -182,6 +182,23 @@ export interface Update {
   createdAt: string;
 }
 
+// Notification Types (as exposed by OrbitChain-API GET /notifications)
+export interface NotificationDto {
+  id: string;
+  type: string; // API NotificationType enum (e.g. 'DONATION_RECEIVED')
+  title: string;
+  message: string;
+  relatedId?: string | null;
+  isRead: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface NotificationListResponse {
+  data: NotificationDto[];
+  total: number;
+}
+
 // Share Types
 export interface ShareRecord {
   id: string;
