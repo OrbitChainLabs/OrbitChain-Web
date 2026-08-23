@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth/authOptions';
+import { requireAdminResponse } from '@/lib/auth/requireAdmin';
 import { AuditLog } from '@/types';
 
 // Mock audit logs data - in a real app, this would come from a database
@@ -80,13 +79,10 @@ const mockAuditLogs: AuditLog[] = [
 ];
 
 export async function GET(request: NextRequest) {
-  try {
-    // Check authentication and admin role
-    const session = await getServerSession(authOptions);
-    if (!session || session.backendUser?.role !== 'admin') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+  const denied = await requireAdminResponse(request);
+  if (denied) return denied;
 
+  try {
     const { searchParams } = new URL(request.url);
 
     // Parse query parameters
