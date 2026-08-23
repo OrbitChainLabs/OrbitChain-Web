@@ -293,7 +293,7 @@ function createFallbackProject(id: string): Project | null {
 }
 
 async function fetchProject(id: string): Promise<Project | null> {
-  const apiBaseUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api').replace(/\/+$/, '');
+  const apiBaseUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001').replace(/\/+$/, '');
 
   try {
     const response = await fetch(`${apiBaseUrl}/projects/${encodeURIComponent(id)}`, {

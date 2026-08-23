@@ -17,6 +17,10 @@ type EnvSchema = {
   // API
   NEXT_PUBLIC_API_URL: string;
 
+  // App / SEO
+  NEXT_PUBLIC_APP_URL: string;
+  NEXT_PUBLIC_BASE_URL: string;
+
   // Stellar core
   NEXT_PUBLIC_STELLAR_NETWORK: 'testnet' | 'mainnet' | 'futurenet';
   NEXT_PUBLIC_STELLAR_HORIZON_URL: string;
@@ -61,6 +65,15 @@ type EnvSchema = {
   NEXT_PUBLIC_SENTRY_DSN: string;
   NEXT_PUBLIC_GA_MEASUREMENT_ID: string;
 
+  // Error tracking
+  NEXT_PUBLIC_ERROR_TRACKING_ENABLED: string;
+  NEXT_PUBLIC_ENVIRONMENT: string;
+  NEXT_PUBLIC_APP_VERSION: string;
+  NEXT_PUBLIC_ERROR_SAMPLE_RATE: string;
+
+  // Stellar explorer links
+  NEXT_PUBLIC_STELLAR_EXPLORER_URL: string;
+
   // Cloudinary
   NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME: string;
   NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET: string;
@@ -70,6 +83,27 @@ type EnvSchema = {
   DATABASE_URL: string;
   STELLAR_ADMIN_SECRET_KEY: string;
   REDIS_URL: string;
+
+  // Cloudinary (server-side deletion)
+  CLOUDINARY_API_KEY: string;
+  CLOUDINARY_API_SECRET: string;
+
+  // NextAuth / OAuth providers
+  NEXTAUTH_SECRET: string;
+  GOOGLE_CLIENT_ID: string;
+  GOOGLE_CLIENT_SECRET: string;
+  GITHUB_CLIENT_ID: string;
+  GITHUB_CLIENT_SECRET: string;
+
+  // Legacy n18n scaffolding (components/n18n — unused, declared to close the contract)
+  APP_NAME: string;
+  DB_TYPE: string;
+  DB_HOST: string;
+  DB_PORT: string;
+  DB_USERNAME: string;
+  DB_PASSWORD: string;
+  DB_NAME: string;
+  DB_SYNCHRONIZE: string;
 };
 
 // ---------------------------------------------------------------------------
@@ -82,11 +116,23 @@ interface Rule {
   validate?: (value: string) => string | null;
 }
 
-const RULES: Record<keyof EnvSchema, Rule> = {
+export const RULES: Record<keyof EnvSchema, Rule> = {
   // API
   NEXT_PUBLIC_API_URL: {
     description: 'Backend API base URL',
     required: true,
+    validate: (v) => (isUrl(v) ? null : 'Must be a valid http/https URL'),
+  },
+
+  // App / SEO
+  NEXT_PUBLIC_APP_URL: {
+    description: 'Canonical app URL used for shareable campaign links',
+    required: false,
+    validate: (v) => (isUrl(v) ? null : 'Must be a valid http/https URL'),
+  },
+  NEXT_PUBLIC_BASE_URL: {
+    description: 'Canonical site base URL for sitemap.xml, robots.txt and metadata',
+    required: false,
     validate: (v) => (isUrl(v) ? null : 'Must be a valid http/https URL'),
   },
 
@@ -211,6 +257,39 @@ const RULES: Record<keyof EnvSchema, Rule> = {
   NEXT_PUBLIC_SENTRY_DSN: { description: 'Sentry DSN', required: false },
   NEXT_PUBLIC_GA_MEASUREMENT_ID: { description: 'Google Analytics measurement ID', required: false },
 
+  // Error tracking
+  NEXT_PUBLIC_ERROR_TRACKING_ENABLED: {
+    description: 'Enable centralized error tracking (true | false)',
+    required: false,
+    validate: (v) =>
+      !v || ['true', 'false'].includes(v) ? null : 'Must be "true" or "false"',
+  },
+  NEXT_PUBLIC_ENVIRONMENT: {
+    description: 'Environment label reported to the error tracker',
+    required: false,
+  },
+  NEXT_PUBLIC_APP_VERSION: {
+    description: 'App version reported to the error tracker',
+    required: false,
+  },
+  NEXT_PUBLIC_ERROR_SAMPLE_RATE: {
+    description: 'Fraction of sampled errors (0 to 1)',
+    required: false,
+    validate: (v) => {
+      const n = Number(v);
+      return !v || (Number.isFinite(n) && n >= 0 && n <= 1)
+        ? null
+        : 'Must be a number between 0 and 1';
+    },
+  },
+
+  // Stellar explorer links
+  NEXT_PUBLIC_STELLAR_EXPLORER_URL: {
+    description: 'Stellar block explorer base URL for transaction links',
+    required: false,
+    validate: (v) => (isUrl(v) ? null : 'Must be a valid http/https URL'),
+  },
+
   // Cloudinary
   NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME: {
     description: 'Cloudinary cloud name for image uploads',
@@ -244,6 +323,45 @@ const RULES: Record<keyof EnvSchema, Rule> = {
         : 'Must be a valid Stellar secret key (56 chars, starts with S)',
   },
   REDIS_URL: { description: 'Redis connection URL', required: false },
+
+  // Cloudinary (server-side deletion)
+  CLOUDINARY_API_KEY: {
+    description: 'Cloudinary API key for server-side image deletion',
+    required: false,
+  },
+  CLOUDINARY_API_SECRET: {
+    description: 'Cloudinary API secret for server-side image deletion',
+    required: false,
+  },
+
+  // NextAuth / OAuth providers
+  NEXTAUTH_SECRET: {
+    description: 'NextAuth session secret (used alongside AUTH_SECRET)',
+    required: false,
+  },
+  GOOGLE_CLIENT_ID: { description: 'Google OAuth client ID', required: false },
+  GOOGLE_CLIENT_SECRET: { description: 'Google OAuth client secret', required: false },
+  GITHUB_CLIENT_ID: { description: 'GitHub OAuth client ID', required: false },
+  GITHUB_CLIENT_SECRET: { description: 'GitHub OAuth client secret', required: false },
+
+  // Legacy n18n scaffolding (components/n18n is unused; declared to close the contract)
+  APP_NAME: { description: 'Legacy: app name used by unused n18n scaffolding', required: false },
+  DB_TYPE: { description: 'Legacy: DB driver used by unused n18n scaffolding', required: false },
+  DB_HOST: { description: 'Legacy: DB host used by unused n18n scaffolding', required: false },
+  DB_PORT: {
+    description: 'Legacy: DB port used by unused n18n scaffolding',
+    required: false,
+    validate: (v) => (!v || /^\d+$/.test(v) ? null : 'Must be a numeric port'),
+  },
+  DB_USERNAME: { description: 'Legacy: DB username used by unused n18n scaffolding', required: false },
+  DB_PASSWORD: { description: 'Legacy: DB password used by unused n18n scaffolding', required: false },
+  DB_NAME: { description: 'Legacy: DB name used by unused n18n scaffolding', required: false },
+  DB_SYNCHRONIZE: {
+    description: 'Legacy: auto-sync schema flag used by unused n18n scaffolding',
+    required: false,
+    validate: (v) =>
+      !v || ['true', 'false'].includes(v) ? null : 'Must be "true" or "false"',
+  },
 };
 
 // ---------------------------------------------------------------------------

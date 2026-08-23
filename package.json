@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "type-check": "tsc --noEmit",
+    "test": "node --test \"tests/**/*.test.ts\"",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build"
   },
