@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { verifyToken } from '@/lib/auth/verifyToken';
 
 // In-memory store for drafts (in production, use a database)
 // Format: { userId: [{ id, title, formData, currentStep, createdAt, updatedAt }] }
@@ -6,29 +7,21 @@ const draftsStore = new Map<string, any[]>();
 
 const MAX_DRAFTS_PER_USER = 5;
 
-// Helper to extract user ID from token
-function getUserIdFromRequest(request: NextRequest): string | null {
-  try {
-    const token = request.cookies.get('token')?.value;
-    if (!token) return null;
+// Helper to extract a verified user ID from the token cookie.
+// The token is validated against the API (signature + expiry); the decoded
+// payload is never trusted on its own.
+async function getVerifiedUserId(request: NextRequest): Promise<string | null> {
+  const token = request.cookies.get('token')?.value;
+  if (!token) return null;
 
-    const payloadSegment = token.split('.')[1];
-    if (!payloadSegment) return null;
-
-    const base64 = payloadSegment.replace(/-/g, '+').replace(/_/g, '/');
-    const jsonPayload = atob(base64);
-    const payload = JSON.parse(jsonPayload);
-
-    return payload.sub || payload.userId || null;
-  } catch {
-    return null;
-  }
+  const verified = await verifyToken(token);
+  return verified?.userId ?? null;
 }
 
 // GET /api/drafts - List all drafts for the current user
 export async function GET(request: NextRequest) {
   try {
-    const userId = getUserIdFromRequest(request);
+    const userId = await getVerifiedUserId(request);
     if (!userId) {
       return NextResponse.json(
         { error: 'Unauthorized' },
@@ -50,7 +43,7 @@ export async function GET(request: NextRequest) {
 // POST /api/drafts - Create or update a draft
 export async function POST(request: NextRequest) {
   try {
-    const userId = getUserIdFromRequest(request);
+    const userId = await getVerifiedUserId(request);
     if (!userId) {
       return NextResponse.json(
         { error: 'Unauthorized' },
