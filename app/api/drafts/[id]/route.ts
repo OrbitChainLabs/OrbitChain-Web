@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyToken } from '@/lib/auth/verifyToken';
-
-// In-memory store for drafts (same as route.ts)
-const draftsStore = new Map<string, any[]>();
+import { getDraft, deleteDraft } from '@/lib/server/draftStore';
 
 // Helper to extract a verified user ID from the token cookie.
 // The token is validated against the API (signature + expiry); the decoded
@@ -29,8 +27,7 @@ export async function GET(
       );
     }
 
-    const userDrafts = draftsStore.get(userId) || [];
-    const draft = userDrafts.find((d: any) => d.id === params.id);
+    const draft = await getDraft(userId, params.id);
 
     if (!draft) {
       return NextResponse.json(
@@ -63,17 +60,14 @@ export async function DELETE(
       );
     }
 
-    const userDrafts = draftsStore.get(userId) || [];
-    const filteredDrafts = userDrafts.filter((d: any) => d.id !== params.id);
+    const deleted = await deleteDraft(userId, params.id);
 
-    if (filteredDrafts.length === userDrafts.length) {
+    if (!deleted) {
       return NextResponse.json(
         { error: 'Draft not found' },
         { status: 404 }
       );
     }
-
-    draftsStore.set(userId, filteredDrafts);
 
     return NextResponse.json({ success: true });
   } catch (error) {
