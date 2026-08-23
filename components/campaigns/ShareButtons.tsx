@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Share2, Twitter, Linkedin, MessageCircle, Copy, Check } from 'lucide-react';
 import { toast } from '@/utils/toast';
+import { useWalletStore } from '@/store/walletStore';
 
 interface ShareButtonsProps {
   campaignId: string;
@@ -20,20 +21,51 @@ export function ShareButtons({
   const [copied, setCopied] = useState(false);
   const [shares, setShares] = useState(shareCount);
   const [isLoading, setIsLoading] = useState(false);
+  const walletAddress = useWalletStore((state) => state.address);
 
   const shareMessage = `Support "${campaignTitle}" on OrbitChain. Every contribution helps make a difference! 🌟`;
+
+  // The server-side stats are the source of truth for the count; the
+  // shareCount prop is only the initial fallback.
+  useEffect(() => {
+    let cancelled = false;
+
+    fetch(`/api/campaigns/${campaignId}/shares/stats`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!cancelled && data?.data?.totalShares !== undefined) {
+          setShares(data.data.totalShares);
+        }
+      })
+      .catch(() => {
+        // Keep the prop value when the stats route is unavailable.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [campaignId]);
 
   const handleShare = async (platform: 'twitter' | 'linkedin' | 'whatsapp' | 'copy') => {
     setIsLoading(true);
     try {
-      // Track share in backend
-      await fetch(`/api/campaigns/${campaignId}/shares`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ platform }),
-      });
+      // Track share in backend. Only a connected wallet counts — an absent
+      // identity must not inflate the stats.
+      let recorded = false;
+      if (walletAddress) {
+        const res = await fetch(`/api/campaigns/${campaignId}/shares`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ platform, walletAddress }),
+        });
+        recorded = res.ok;
+      } else {
+        toast.info('Connect a wallet to track this share');
+      }
 
-      setShares((prev) => prev + 1);
+      if (recorded) {
+        setShares((prev) => prev + 1);
+      }
 
       switch (platform) {
         case 'twitter':
