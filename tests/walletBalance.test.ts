@@ -7,8 +7,7 @@
  *
  * Run with: npm test
  */
-import { test, beforeEach, afterEach } from 'node:test';
-import assert from 'node:assert/strict';
+import { test, beforeEach, afterEach, expect } from 'vitest';
 
 import { fetchNativeBalance, parseNativeBalance, ZERO_BALANCE } from '../lib/stellar/balance.ts';
 import { resolveHorizonUrl } from '../lib/stellar/config.ts';
@@ -51,8 +50,8 @@ test('native balance is extracted and stored on success', async () => {
 
   const result = await fetchNativeBalance(ADDRESS, 'https://horizon-testnet.stellar.org');
 
-  assert.equal(result.error, null);
-  assert.equal(result.balance, '123.4567890');
+  expect(result.error).toBeNull();
+  expect(result.balance).toBe('123.4567890');
 });
 
 test('account without a native asset reports zero with no error', async () => {
@@ -62,8 +61,8 @@ test('account without a native asset reports zero with no error', async () => {
 
   const result = await fetchNativeBalance(ADDRESS, 'https://horizon-testnet.stellar.org');
 
-  assert.equal(result.error, null);
-  assert.equal(result.balance, ZERO_BALANCE);
+  expect(result.error).toBeNull();
+  expect(result.balance).toBe(ZERO_BALANCE);
 });
 
 test('404 from Horizon is a valid zero balance, not an error', async () => {
@@ -71,8 +70,8 @@ test('404 from Horizon is a valid zero balance, not an error', async () => {
 
   const result = await fetchNativeBalance(ADDRESS, 'https://horizon-testnet.stellar.org');
 
-  assert.equal(result.error, null);
-  assert.equal(result.balance, ZERO_BALANCE);
+  expect(result.error).toBeNull();
+  expect(result.balance).toBe(ZERO_BALANCE);
 });
 
 test('network failure surfaces as an error instead of a wrong balance', async () => {
@@ -82,9 +81,9 @@ test('network failure surfaces as an error instead of a wrong balance', async ()
 
   const result = await fetchNativeBalance(ADDRESS, 'https://horizon-testnet.stellar.org');
 
-  assert.equal(result.balance, null);
-  assert.notEqual(result.error, null);
-  assert.match(result.error ?? '', /fetch failed/);
+  expect(result.balance).toBeNull();
+  expect(result.error).not.toBeNull();
+  expect(result.error ?? '').toMatch(/fetch failed/);
 });
 
 test('non-404 HTTP error surfaces as an error', async () => {
@@ -92,8 +91,8 @@ test('non-404 HTTP error surfaces as an error', async () => {
 
   const result = await fetchNativeBalance(ADDRESS, 'https://horizon-testnet.stellar.org');
 
-  assert.equal(result.balance, null);
-  assert.match(result.error ?? '', /HTTP 500/);
+  expect(result.balance).toBeNull();
+  expect(result.error ?? '').toMatch(/HTTP 500/);
 });
 
 test('trailing slashes on the Horizon URL are tolerated', async () => {
@@ -107,23 +106,23 @@ test('trailing slashes on the Horizon URL are tolerated', async () => {
 
   await fetchNativeBalance(ADDRESS, 'https://horizon-testnet.stellar.org/');
 
-  assert.equal(calledUrl, `https://horizon-testnet.stellar.org/accounts/${ADDRESS}`);
+  expect(calledUrl).toBe(`https://horizon-testnet.stellar.org/accounts/${ADDRESS}`);
 });
 
 test('testnet configuration resolves the testnet Horizon URL', () => {
   process.env.NEXT_PUBLIC_STELLAR_NETWORK = 'testnet';
-  assert.equal(resolveHorizonUrl(), 'https://horizon-testnet.stellar.org');
+  expect(resolveHorizonUrl()).toBe('https://horizon-testnet.stellar.org');
 });
 
 test('mainnet configuration resolves the mainnet Horizon URL', () => {
   process.env.NEXT_PUBLIC_STELLAR_NETWORK = 'mainnet';
-  assert.equal(resolveHorizonUrl(), 'https://horizon.stellar.org');
+  expect(resolveHorizonUrl()).toBe('https://horizon.stellar.org');
 });
 
 test('explicit NEXT_PUBLIC_STELLAR_HORIZON_URL overrides the network mapping', () => {
   process.env.NEXT_PUBLIC_STELLAR_NETWORK = 'testnet';
   process.env.NEXT_PUBLIC_STELLAR_HORIZON_URL = 'https://custom-horizon.example.org/';
-  assert.equal(resolveHorizonUrl(), 'https://custom-horizon.example.org');
+  expect(resolveHorizonUrl()).toBe('https://custom-horizon.example.org');
 });
 
 test('mainnet configuration fetches from the mainnet Horizon URL', async () => {
@@ -138,11 +137,11 @@ test('mainnet configuration fetches from the mainnet Horizon URL', async () => {
 
   const result = await fetchNativeBalance(ADDRESS, resolveHorizonUrl());
 
-  assert.equal(calledUrl, `https://horizon.stellar.org/accounts/${ADDRESS}`);
-  assert.equal(result.balance, '42.0000000');
+  expect(calledUrl).toBe(`https://horizon.stellar.org/accounts/${ADDRESS}`);
+  expect(result.balance).toBe('42.0000000');
 });
 
 test('parseNativeBalance falls back to zero for an empty balances list', () => {
-  assert.equal(parseNativeBalance({ balances: [] }), ZERO_BALANCE);
-  assert.equal(parseNativeBalance({}), ZERO_BALANCE);
+  expect(parseNativeBalance({ balances: [] })).toBe(ZERO_BALANCE);
+  expect(parseNativeBalance({})).toBe(ZERO_BALANCE);
 });

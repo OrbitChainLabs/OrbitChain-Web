@@ -15,8 +15,7 @@
  *
  * Run with: npm test
  */
-import { test } from 'node:test';
-import assert from 'node:assert/strict';
+import { test, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -75,22 +74,21 @@ test('every process.env.* read is declared in lib/env.ts RULES', () => {
     ...SCANNED_FILES.map((file) => join(ROOT, file)),
   ];
 
-  assert.ok(files.length > 0, 'expected to find source files to scan');
+  expect(files.length, 'expected to find source files to scan').toBeGreaterThan(0);
 
   const reads = collectEnvReads(files);
   const undeclared = [...reads.entries()]
     .filter(([key]) => !BUILD_TIME_VARS.has(key) && !(key in RULES))
     .map(([key, locations]) => `${key} — read in ${locations.join(', ')}`);
 
-  assert.deepEqual(
+  expect(
     undeclared,
-    [],
     [
       'process.env reads not declared in lib/env.ts RULES (add a rule or, for a',
       'framework-managed build-time var, extend BUILD_TIME_VARS):',
       ...undeclared.map((line) => `  - ${line}`),
     ].join('\n'),
-  );
+  ).toEqual([]);
 });
 
 test('every RULES key is present in .env.example', () => {
@@ -101,12 +99,11 @@ test('every RULES key is present in .env.example', () => {
     return !pattern.test(example);
   });
 
-  assert.deepEqual(
+  expect(
     missing,
-    [],
     [
       'RULES keys missing from .env.example (add them, commented out when optional):',
       ...missing.map((key) => `  - ${key}`),
     ].join('\n'),
-  );
+  ).toEqual([]);
 });
