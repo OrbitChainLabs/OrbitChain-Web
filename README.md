@@ -203,7 +203,7 @@ npm start
 | `start` | `npm run start` | Start production server |
 | `lint` | `npm run lint` | Run ESLint |
 | `type-check` | `npm run type-check` | Run TypeScript type checking |
-| `test` | `npm test` | Run the test suite (env-contract regression tests) |
+| `test` | `npm test` | Run the unit test suite (Vitest) |
 | `storybook` | `npm run storybook` | Launch Storybook component library |
 | `build-storybook` | `npm run build-storybook` | Build Storybook for deployment |
 
@@ -250,8 +250,14 @@ We welcome contributions! Please follow these guidelines:
 
 ## 🧪 Testing
 
+The project uses **Vitest** for unit tests. Tests live in `tests/` and cover
+Stellar formatting/validation/error handling, the cache manager, the auth
+and UI stores, and the image-upload utilities. Tests run in the Node
+execution environment by default; the image-upload tests opt into jsdom
+via a per-file pragma.
+
 ```bash
-# Run the test suite (environment-contract regression tests)
+# Run the unit test suite
 npm test
 
 # Run type checking
@@ -263,6 +269,9 @@ npm run lint
 # Run Storybook component tests
 npm run storybook
 ```
+
+CI (`.github/workflows/ci.yml`) runs type-check, lint, test, and build on
+every push to `main` and on every pull request, with no required secrets.
 
 ---
 
