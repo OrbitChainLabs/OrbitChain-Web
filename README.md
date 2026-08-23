@@ -164,10 +164,18 @@ Copy `.env.example` to `.env.local` and configure the following required variabl
 | `NEXT_PUBLIC_STELLAR_HORIZON_URL` | Horizon server URL |
 | `NEXT_PUBLIC_SOROBAN_RPC_URL` | Soroban RPC endpoint |
 | `NEXT_PUBLIC_STELLAR_NETWORK_PASSPHRASE` | Network passphrase |
+| `NEXT_PUBLIC_CAMPAIGN_CONTRACT_ID` | Contract id of the deployed `orbitchain-campaign` contract (required for campaign deployment) |
+| `STELLAR_ADMIN_SECRET_KEY` | Server-side Stellar signing key used to sign campaign deployments |
 | `AUTH_SECRET` | JWT/session signing secret (32+ characters) |
 | `DATABASE_URL` | PostgreSQL connection string |
 
 See [`README.env.md`](./README.env.md) for the full list of optional variables and wallet configuration.
+
+### Campaign deployment
+
+The Deploy step of the campaign wizard performs a **real** Soroban submission — it does not fabricate a transaction hash. It builds the `initialize` invocation against the canonical [`orbitchain-campaign` contract](https://github.com/OrbitChainLabs/OrbitChain-Contracts) (`campaign/` crate), signs it with `STELLAR_ADMIN_SECRET_KEY` (server-side admin signing), submits it to the network configured by `NEXT_PUBLIC_STELLAR_NETWORK` / `NEXT_PUBLIC_STELLAR_NETWORK_PASSPHRASE` / `NEXT_PUBLIC_SOROBAN_RPC_URL`, and registers the campaign through the backend's `POST /campaigns` lifecycle endpoint so the returned campaign id is real.
+
+Deployment fails with a specific, user-facing error when any piece is missing (contract id, admin key, RPC), when the admin account is unfunded, when the simulation or submission is rejected, or when backend registration fails — the on-chain transaction hash is included in the error when the ledger submission succeeded but registration did not.
 
 ---
 

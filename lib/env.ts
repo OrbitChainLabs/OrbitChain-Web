@@ -23,6 +23,9 @@ type EnvSchema = {
   NEXT_PUBLIC_SOROBAN_RPC_URL: string;
   NEXT_PUBLIC_STELLAR_NETWORK_PASSPHRASE: string;
 
+  // Campaign contract
+  NEXT_PUBLIC_CAMPAIGN_CONTRACT_ID: string;
+
   // WalletConnect
   NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: string;
   NEXT_PUBLIC_WALLET_APP_NAME: string;
@@ -109,6 +112,11 @@ const RULES: Record<keyof EnvSchema, Rule> = {
   NEXT_PUBLIC_STELLAR_NETWORK_PASSPHRASE: {
     description: 'Stellar network passphrase',
     required: true,
+  },
+  NEXT_PUBLIC_CAMPAIGN_CONTRACT_ID: {
+    description:
+      'Contract id of the deployed orbitchain-campaign contract that the deploy step targets',
+    required: false,
   },
 
   // WalletConnect
